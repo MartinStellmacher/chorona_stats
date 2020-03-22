@@ -4,7 +4,7 @@ import git
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-hopkinsGitDir = "./data/COVID-19"
+hopkinsGitDir = "./COVID-19"
 hopkinsTimeSeries = os.path.join(hopkinsGitDir,"csse_covid_19_data/csse_covid_19_time_series")
 hopkinsConfirmed = "time_series_19-covid-Confirmed.csv"
 hopkinsDeath = "time_series_19-covid-Deaths.csv"
@@ -46,6 +46,15 @@ def plot_stats( data, title, pdf):
     plot_bars(data.iloc[:, -1:], title, pdf)
     plot_over_time( data.T, title, pdf)
 
+def plot_confirmed_vs_killed( confirmed, killed, pdf):
+    for country in confirmed.index:
+        d=confirmed.loc[country]
+        (d).plot(title=f'{country}', legend=True, logy=True, rot=45)
+        d=killed.loc[country]
+        (d).plot(title=f'{country}', legend=True, logy=True, rot=45)
+        plt.legend(['confirmed','killed'])
+        after_plot( pdf)
+
 def read_and_cleanup( filename):
     data = pd.read_csv(os.path.join(hopkinsTimeSeries, filename))  # read raw CSV
     data = data.rename(columns={"Province/State": "Province",
@@ -81,6 +90,9 @@ def generate_all_plots(pdf=None):
     plot_stats(dailyIncreaseConfirmed, 'confirmed daily increase [%]', pdf)
     dailyIncreaseKilled=100*((killed.T+1)/(killed.T.shift()+1)-1).T
     plot_stats(dailyIncreaseKilled, 'killed daily increase [%]', pdf)
+
+    plot_confirmed_vs_killed( confirmed, killed, pdf)
+
 
 # MAIN
 with PdfPages('stats.pdf') as pdf:
