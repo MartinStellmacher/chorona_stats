@@ -37,21 +37,25 @@ def plot_bars(data, title, pdf):
     data.plot.bar( title=title,rot=45)
     after_plot( pdf)
 
+def plot_increase_bars(data, title, pdf):
+    inc = 100 * ((data.T + 1) / (data.T.shift() + 1) - 1).T
+    inc.plot.bar( title=title,rot=45)
+    after_plot( pdf)
+
 def plot_over_time(data, title, pdf):
     data.plot( title=title,rot=45)
     after_plot( pdf)
 
 def plot_stats( data, title, pdf):
+    print(f'\n{title}\n\n')
     print(data)
     plot_bars(data.iloc[:, -1:], title, pdf)
     plot_over_time( data.T, title, pdf)
 
 def plot_confirmed_vs_killed( confirmed, killed, pdf):
     for country in confirmed.index:
-        d=confirmed.loc[country]
-        (d).plot(title=f'{country}', legend=True, logy=True, rot=45)
-        d=killed.loc[country]
-        (d).plot(title=f'{country}', legend=True, logy=True, rot=45)
+        confirmed.loc[country].plot(title=f'{country}', legend=True, logy=True, rot=45)
+        killed.loc[country].plot(title=f'{country}', legend=True, logy=True, rot=45)
         plt.legend(['confirmed','killed'])
         after_plot( pdf)
 
@@ -71,7 +75,15 @@ def generate_all_plots(pdf=None):
     confirmed = read_and_cleanup(hopkinsConfirmed)
     killed = read_and_cleanup(hopkinsDeath)
     # select 10 countries with most kills
-    selectedCountries = list(killed.sort_values(killed.columns[-1]).tail(10).index)
+    selectedCountries = list(killed.sort_values(killed.columns[-1]).tail(11).index)
+
+    #Teutscheland
+    german_confirmed = confirmed.loc['Germany'].tail(10)
+    german_killed = killed.loc['Germany'].tail(10)
+    plot_increase_bars( german_confirmed, 'German Confirmed 10 Days Increase [%]',pdf )
+    plot_increase_bars( german_killed, 'German Killed 10 Days Increase [%]',pdf )
+
+
     # filter data by selected countries
     confirmed = confirmed.loc[selectedCountries]
     killed = killed.loc[selectedCountries]
@@ -94,10 +106,12 @@ def generate_all_plots(pdf=None):
     plot_confirmed_vs_killed( confirmed, killed, pdf)
 
 
-# MAIN
-with PdfPages('stats.pdf') as pdf:
-    generate_all_plots( pdf)
-#generate_all_plots()
+########################### MAIN ###########################
+if True:
+    with PdfPages('stats.pdf') as pdf:
+        generate_all_plots( pdf)
+else:
+    generate_all_plots()
 
 
 
