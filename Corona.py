@@ -6,10 +6,10 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 hopkinsGitDir = "./COVID-19"
 hopkinsTimeSeries = os.path.join(hopkinsGitDir,"csse_covid_19_data/csse_covid_19_time_series")
-hopkinsConfirmed = "time_series_19-covid-Confirmed.csv"
-hopkinsDeath = "time_series_19-covid-Deaths.csv"
-hopkinsRecovered = "time_series_19-covid-Recovered.csv"
-#hopkinsFiles = [ hopkinsConfirmed, hopkinsDeath, hopkinsRecovered]
+hopkinsConfirmed = "time_series_covid19_confirmed_global.csv" # "time_series_19-covid-Confirmed.csv"
+hopkinsDeath = "time_series_covid19_deaths_global.csv" # "time_series_19-covid-Deaths.csv"
+# hopkinsRecovered = "time_series_19-covid-Recovered.csv"
+# hopkinsFiles = [ hopkinsConfirmed, hopkinsDeath, hopkinsRecovered]
 
 # todo stl: retrieve online ...
 populationDict = {
@@ -75,7 +75,7 @@ def generate_all_plots(pdf=None):
     confirmed = read_and_cleanup(hopkinsConfirmed)
     killed = read_and_cleanup(hopkinsDeath)
     # select 10 countries with most kills
-    selectedCountries = list(killed.sort_values(killed.columns[-1]).tail(11).index)
+    selectedCountries = list(killed.sort_values(killed.columns[-1]).tail(10).index)
 
     #Teutscheland
     german_confirmed = confirmed.loc['Germany'].tail(10)
