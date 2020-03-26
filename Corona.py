@@ -8,23 +8,12 @@ hopkinsGitDir = "./COVID-19"
 hopkinsTimeSeries = os.path.join(hopkinsGitDir,"csse_covid_19_data/csse_covid_19_time_series")
 hopkinsConfirmed = "time_series_covid19_confirmed_global.csv" # "time_series_19-covid-Confirmed.csv"
 hopkinsDeath = "time_series_covid19_deaths_global.csv" # "time_series_19-covid-Deaths.csv"
-# hopkinsRecovered = "time_series_19-covid-Recovered.csv"
-# hopkinsFiles = [ hopkinsConfirmed, hopkinsDeath, hopkinsRecovered]
 
-# todo stl: retrieve online ...
-populationDict = {
-    'China': 1400.050000,
-    'Korea, South': 51.629512,
-    'Germany': 83.019213,
-    'Switzerland': 8.544527,
-    'United Kingdom': 66.435550,
-    'Italy': 60.262701,
-    'Spain': 46.722980,
-    'France': 66.993000,
-    'US': 327.167434,
-    'Iran': 81.800269,
-    'Netherlands': 17.290688
-}
+populationFile = './cia_world_population_202007.txt'
+population = pd.read_fwf( populationFile,colspecs=[(8,53),(65,78)],header=1,thousands=',')
+population = population.rename(columns={'Unnamed: 0':'country','Unnamed: 1':'population'})
+population = population.set_index('country')
+population = population.rename({'United States':'US'})
 
 def after_plot( pdf):
     if pdf is None:
@@ -37,8 +26,13 @@ def plot_bars(data, title, pdf):
     data.plot.bar( title=title,rot=45)
     after_plot( pdf)
 
-def plot_increase_bars(data, title, pdf):
+def plot_increase_bars_rel(data, title, pdf):
     inc = 100 * ((data.T + 1) / (data.T.shift() + 1) - 1).T
+    inc.plot.bar( title=title,rot=45)
+    after_plot( pdf)
+
+def plot_increase_bars_abs(data, title, pdf):
+    inc = data - data.shift()
     inc.plot.bar( title=title,rot=45)
     after_plot( pdf)
 
@@ -78,10 +72,12 @@ def generate_all_plots(pdf=None):
     selectedCountries = list(killed.sort_values(killed.columns[-1]).tail(10).index)
 
     #Teutscheland
-    german_confirmed = confirmed.loc['Germany'].tail(10)
-    german_killed = killed.loc['Germany'].tail(10)
-    plot_increase_bars( german_confirmed, 'German Confirmed 10 Days Increase [%]',pdf )
-    plot_increase_bars( german_killed, 'German Killed 10 Days Increase [%]',pdf )
+    german_confirmed = confirmed.loc['Germany'].tail(21)
+    german_killed = killed.loc['Germany'].tail(21)
+    plot_increase_bars_rel( german_confirmed, 'German Confirmed 3 Week Increase [%]',pdf )
+    plot_increase_bars_rel( german_killed, 'German Killed 3 Week Increase [%]',pdf )
+    plot_increase_bars_abs( german_confirmed, 'German Confirmed 3 Week Increase',pdf )
+    plot_increase_bars_abs( german_killed, 'German Killed 3 Week Increase',pdf )
 
 
     # filter data by selected countries
@@ -91,7 +87,7 @@ def generate_all_plots(pdf=None):
     plot_stats( confirmed, 'confirmed', pdf)
     plot_stats( killed, 'killed', pdf)
 
-    population_millions = pd.Series( populationDict).loc[selectedCountries]
+    population_millions = population.loc[selectedCountries]['population']/1000000.0
     plot_stats((confirmed.T/population_millions).T, 'confirmed per million', pdf)
     plot_stats((killed.T/population_millions).T, 'killed per million', pdf)
 
