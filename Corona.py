@@ -13,9 +13,21 @@ populationFile = './cia_world_population_202007.txt'
 population = pd.read_fwf( populationFile,colspecs=[(8,53),(65,78)],header=1,thousands=',')
 population = population.rename(columns={'Unnamed: 0':'country','Unnamed: 1':'population'})
 population = population.set_index('country')
-population = population.rename({'United States':'US'})
+population = population.rename({
+    'United States':'US',
+    'Holy See (Vatican City)':'Holy See',
+    'Bahamas, The': 'Bahamas',
+    'Gaza Strip': 'West Bank and Gaza',
+    'Congo, Republic of the': 'Congo (Brazzaville)',
+    'Macedonia': 'North Macedonia',
+    'Congo, Democratic Republic of the': 'Congo (Kinshasa)',
+    'Gambia, The': 'Gambia',
+    'Taiwan': 'Taiwan*'
+})
 
 def after_plot( pdf):
+    # fix borders around charts
+    plt.tight_layout()
     if pdf is None:
         plt.show()
     else:
@@ -23,21 +35,21 @@ def after_plot( pdf):
         plt.close()
 
 def plot_bars(data, title, pdf):
-    data.plot.bar( title=title,rot=45)
+    data.plot.bar( title=title,rot=90)
     after_plot( pdf)
 
 def plot_increase_bars_rel(data, title, pdf):
     inc = 100 * ((data.T + 1) / (data.T.shift() + 1) - 1).T
-    inc.plot.bar( title=title,rot=45)
+    inc.plot.bar( title=title,rot=90)
     after_plot( pdf)
 
 def plot_increase_bars_abs(data, title, pdf):
     inc = data - data.shift()
-    inc.plot.bar( title=title,rot=45)
+    inc.plot.bar( title=title,rot=90)
     after_plot( pdf)
 
 def plot_over_time(data, title, pdf):
-    data.plot( title=title,rot=45)
+    data.plot( title=title,rot=90)
     after_plot( pdf)
 
 def plot_stats( data, title, pdf):
@@ -61,6 +73,9 @@ def read_and_cleanup( filename):
     data = data.iloc[:, 2:]  # remove lat/lon columns
     return data
 
+def topN( df, n):
+    return df.sort_values(df.columns[-1],na_position='first').tail(n)
+
 def generate_all_plots(pdf=None):
     # git update
     hopkinsGit = git.cmd.Git(hopkinsGitDir)
@@ -68,38 +83,37 @@ def generate_all_plots(pdf=None):
     # read raw data
     confirmed = read_and_cleanup(hopkinsConfirmed)
     killed = read_and_cleanup(hopkinsDeath)
-    # select 10 countries with most kills
-    selectedCountries = list(killed.sort_values(killed.columns[-1]).tail(10).index)
 
     #Teutscheland
-    german_confirmed = confirmed.loc['Germany'].tail(21)
-    german_killed = killed.loc['Germany'].tail(21)
-    plot_increase_bars_rel( german_confirmed, 'German Confirmed 3 Week Increase [%]',pdf )
-    plot_increase_bars_rel( german_killed, 'German Killed 3 Week Increase [%]',pdf )
-    plot_increase_bars_abs( german_confirmed, 'German Confirmed 3 Week Increase',pdf )
-    plot_increase_bars_abs( german_killed, 'German Killed 3 Week Increase',pdf )
-
+    historyDays=14
+    german_confirmed = confirmed.loc['Germany'].tail(historyDays)
+    german_killed = killed.loc['Germany'].tail(historyDays)
+    plot_increase_bars_rel( german_confirmed, f'German Confirmed {historyDays} Day Increase [%]',pdf )
+    plot_increase_bars_rel( german_killed, f'German Killed {historyDays} Day Increase [%]',pdf )
+    plot_increase_bars_abs( german_confirmed, f'German Confirmed {historyDays} Day Increase',pdf )
+    plot_increase_bars_abs( german_killed, f'German Killed {historyDays} Day Increase',pdf )
 
     # filter data by selected countries
-    confirmed = confirmed.loc[selectedCountries]
-    killed = killed.loc[selectedCountries]
+    countries_with_many_confirmed=confirmed.loc[confirmed.iloc[:,-1]>500].index
+    confirmed = confirmed.loc[countries_with_many_confirmed]
+    killed = killed.loc[countries_with_many_confirmed]
 
-    plot_stats( confirmed, 'confirmed', pdf)
-    plot_stats( killed, 'killed', pdf)
+    plot_stats(topN( confirmed, 10), 'confirmed', pdf)
+    plot_stats(topN( killed, 10), 'killed', pdf)
 
-    population_millions = population.loc[selectedCountries]['population']/1000000.0
-    plot_stats((confirmed.T/population_millions).T, 'confirmed per million', pdf)
-    plot_stats((killed.T/population_millions).T, 'killed per million', pdf)
+    population_millions = population['population']/1000000.0
+    plot_stats(topN((confirmed.T/population_millions).T,10), 'confirmed per million', pdf)
+    plot_stats(topN((killed.T/population_millions).T,10), 'killed per million', pdf)
 
-    plot_stats(100*killed/(confirmed+1), 'killed per confirmed [%]', pdf)
+    plot_stats(topN(100*killed/(confirmed+1),10), 'killed per confirmed [%]', pdf)
 
     # todo stl: da muss noch ein Tiefpassfilter drauf
     dailyIncreaseConfirmed=100*((confirmed.T+1)/(confirmed.T.shift()+1)-1).T
-    plot_stats(dailyIncreaseConfirmed, 'confirmed daily increase [%]', pdf)
+    plot_stats(topN(dailyIncreaseConfirmed,10), 'confirmed daily increase [%]', pdf)
     dailyIncreaseKilled=100*((killed.T+1)/(killed.T.shift()+1)-1).T
-    plot_stats(dailyIncreaseKilled, 'killed daily increase [%]', pdf)
+    plot_stats(topN(dailyIncreaseKilled,10), 'killed daily increase [%]', pdf)
 
-    plot_confirmed_vs_killed( confirmed, killed, pdf)
+    plot_confirmed_vs_killed(topN(confirmed,10), killed, pdf)
 
 
 ########################### MAIN ###########################
