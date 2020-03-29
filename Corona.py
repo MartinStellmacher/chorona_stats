@@ -41,15 +41,22 @@ def plot_bars(data, title, pdf):
     data.plot.bar( title=title,rot=90)
     after_plot( pdf)
 
-def plot_increase_bars_rel(data, title, pdf):
-    inc = 100 * ((data.T + 1) / (data.T.shift() + 1) - 1).T
+def plot_increase_bars(data, name, pdf, relative, count):
+    title = name + f' {count} Days Increase'
+    if relative:
+        title += ' [%]'
+    data_tail = data.tail(count)
+    if relative:
+        inc = 100 * ((data_tail.T + 1) / (data_tail.T.shift() + 1) - 1).T
+    else:
+        inc = data_tail - data_tail.shift()
     inc.plot.bar( title=title,rot=90)
     after_plot( pdf)
 
-def plot_increase_bars_abs(data, title, pdf):
-    inc = data - data.shift()
-    inc.plot.bar( title=title,rot=90)
-    after_plot( pdf)
+def plot_increase_stats( confirmed, killed, location, pdf, historyDays):
+    for rel in [True, False]:
+        plot_increase_bars(confirmed.loc[location], f'Confirmed {location}', pdf, rel, historyDays)
+        plot_increase_bars(killed.loc[location], f'Killed {location}', pdf, rel, historyDays)
 
 def plot_over_time(data, title, pdf):
     data.plot( title=title,rot=90)
@@ -95,10 +102,7 @@ def generate_new_york_plots(pdf=None):
     us_states = ['New York','Louisiana']
     historyDays = 14
     for state in us_states:
-        plot_increase_bars_rel( confirmed.loc[state].tail(historyDays), f'{state} Confirmed {historyDays} Day Increase [%]',pdf )
-        plot_increase_bars_rel( killed.loc[state].tail(historyDays), f'{state} Killed {historyDays} Day Increase [%]',pdf )
-        plot_increase_bars_abs( confirmed.loc[state].tail(historyDays), f'{state} Confirmed {historyDays} Day Increase',pdf )
-        plot_increase_bars_abs( killed.loc[state].tail(historyDays), f'{state} Killed {historyDays} Day Increase',pdf )
+        plot_increase_stats(confirmed, killed, state, pdf, historyDays)
 
 def generate_all_plots(pdf=None):
     # git update
@@ -110,12 +114,7 @@ def generate_all_plots(pdf=None):
 
     #Teutscheland
     historyDays=14
-    german_confirmed = confirmed.loc['Germany'].tail(historyDays)
-    german_killed = killed.loc['Germany'].tail(historyDays)
-    plot_increase_bars_rel( german_confirmed, f'German Confirmed {historyDays} Day Increase [%]',pdf )
-    plot_increase_bars_rel( german_killed, f'German Killed {historyDays} Day Increase [%]',pdf )
-    plot_increase_bars_abs( german_confirmed, f'German Confirmed {historyDays} Day Increase',pdf )
-    plot_increase_bars_abs( german_killed, f'German Killed {historyDays} Day Increase',pdf )
+    plot_increase_stats(confirmed, killed, 'Germany', pdf, historyDays)
 
     # filter data by selected countries
     countries_with_many_confirmed=confirmed.loc[confirmed.iloc[:,-1]>500].index
