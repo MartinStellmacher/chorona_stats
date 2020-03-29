@@ -1,2 +1,3 @@
-You have to clone https://github.com/CSSEGISandData/COVID-19.git to the subfolder COVID-19 initially. Further updates are done by the script. 
+You have to clone https://github.com/CSSEGISandData/COVID-19.git to the subfolder COVID-19 initially. Further updates are done by the script.
+The same applies to the NYT data in covid-19-data
 I have no idea in the moment, if the python mdule git will work well on submodules....

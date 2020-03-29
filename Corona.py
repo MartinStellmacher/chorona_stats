@@ -9,6 +9,9 @@ hopkinsTimeSeries = os.path.join(hopkinsGitDir,"csse_covid_19_data/csse_covid_19
 hopkinsConfirmed = "time_series_covid19_confirmed_global.csv" # "time_series_19-covid-Confirmed.csv"
 hopkinsDeath = "time_series_covid19_deaths_global.csv" # "time_series_19-covid-Deaths.csv"
 
+nyt_git_dir = './covid-19-data'
+nyt_states = 'us-states.csv'
+
 populationFile = './cia_world_population_202007.txt'
 population = pd.read_fwf( populationFile,colspecs=[(8,53),(65,78)],header=1,thousands=',')
 population = population.rename(columns={'Unnamed: 0':'country','Unnamed: 1':'population'})
@@ -76,6 +79,27 @@ def read_and_cleanup( filename):
 def topN( df, n):
     return df.sort_values(df.columns[-1],na_position='first').tail(n)
 
+def generate_new_york_plots(pdf=None):
+    # git update
+    nyt_git = git.cmd.Git(nyt_git_dir)
+    print( nyt_git.pull())
+
+    data = pd.read_csv(os.path.join(nyt_git_dir, nyt_states))
+    confirmed = data.loc[:, ['date', 'state', 'cases']]
+    confirmed = confirmed.set_index(['date', 'state']).unstack(0)
+    confirmed = confirmed.T.droplevel(0).T
+    killed = data.loc[:, ['date', 'state', 'deaths']]
+    killed = killed.set_index(['date', 'state']).unstack(0)
+    killed = killed.T.droplevel(0).T
+
+    us_states = ['New York','Louisiana']
+    historyDays = 14
+    for state in us_states:
+        plot_increase_bars_rel( confirmed.loc[state].tail(historyDays), f'{state} Confirmed {historyDays} Day Increase [%]',pdf )
+        plot_increase_bars_rel( killed.loc[state].tail(historyDays), f'{state} Killed {historyDays} Day Increase [%]',pdf )
+        plot_increase_bars_abs( confirmed.loc[state].tail(historyDays), f'{state} Confirmed {historyDays} Day Increase',pdf )
+        plot_increase_bars_abs( killed.loc[state].tail(historyDays), f'{state} Killed {historyDays} Day Increase',pdf )
+
 def generate_all_plots(pdf=None):
     # git update
     hopkinsGit = git.cmd.Git(hopkinsGitDir)
@@ -120,8 +144,11 @@ def generate_all_plots(pdf=None):
 if True:
     with PdfPages('stats.pdf') as pdf:
         generate_all_plots( pdf)
+        generate_new_york_plots( pdf)
 else:
     generate_all_plots()
+    generate_new_york_plots()
+
 
 
 
