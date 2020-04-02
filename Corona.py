@@ -6,10 +6,11 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 hopkinsGitDir = "./COVID-19"
 hopkinsTimeSeries = os.path.join(hopkinsGitDir,"csse_covid_19_data/csse_covid_19_time_series")
-hopkinsConfirmed = "time_series_covid19_confirmed_global.csv" # "time_series_19-covid-Confirmed.csv"
-hopkinsDeath = "time_series_covid19_deaths_global.csv" # "time_series_19-covid-Deaths.csv"
+hopkinsConfirmed = "time_series_covid19_confirmed_global.csv"
+hopkinsDeath = "time_series_covid19_deaths_global.csv"
 
 nyt_git_dir = './covid-19-data'
+nyt_counties = 'us-counties.csv'
 nyt_states = 'us-states.csv'
 
 populationFile = './cia_world_population_202007.txt'
@@ -84,22 +85,29 @@ def read_and_cleanup( filename):
     return data
 
 def topN( df, n):
-    return df.sort_values(df.columns[-1],na_position='first').tail(n)
+    #return df.sort_values(df.columns[-1],na_position='first').tail(n)
+    top =  df.sort_values(df.columns[-1],na_position='first').tail(n)
+    selectedCountries = set(top.index.values)
+    countries_with_many_confirmed=['Sweden','Portugal','Norway','Germany']
+    selectedCountries.update(countries_with_many_confirmed)
+    selectedData = df.loc[selectedCountries]
+    return selectedData.sort_values(selectedData.columns[-1])
 
 def generate_new_york_plots(pdf=None):
     # git update
     nyt_git = git.cmd.Git(nyt_git_dir)
     print( nyt_git.pull())
 
-    data = pd.read_csv(os.path.join(nyt_git_dir, nyt_states))
-    confirmed = data.loc[:, ['date', 'state', 'cases']]
-    confirmed = confirmed.set_index(['date', 'state']).unstack(0)
+    data = pd.read_csv(os.path.join(nyt_git_dir, nyt_counties))
+    data['county_state'] = data['county']+'/'+data['state']
+    confirmed = data.loc[:, ['date', 'county_state', 'cases']]
+    confirmed = confirmed.set_index(['date', 'county_state']).unstack(0)
     confirmed = confirmed.T.droplevel(0).T
-    killed = data.loc[:, ['date', 'state', 'deaths']]
-    killed = killed.set_index(['date', 'state']).unstack(0)
+    killed = data.loc[:, ['date', 'county_state', 'deaths']]
+    killed = killed.set_index(['date', 'county_state']).unstack(0)
     killed = killed.T.droplevel(0).T
 
-    us_states = ['New York','Louisiana']
+    us_states = ['New York City/New York','Orleans/Louisiana']
     historyDays = 14
     for state in us_states:
         plot_increase_stats(confirmed, killed, state, pdf, historyDays)
@@ -113,7 +121,7 @@ def generate_all_plots(pdf=None):
     killed = read_and_cleanup(hopkinsDeath)
 
     #Teutscheland
-    historyDays=14
+    historyDays=21
     plot_increase_stats(confirmed, killed, 'Germany', pdf, historyDays)
 
     # filter data by selected countries
