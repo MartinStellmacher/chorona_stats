@@ -1,3 +1,5 @@
+from distutils.command.config import config
+
 import pandas as pd
 import os
 import git
@@ -8,6 +10,7 @@ hopkinsGitDir = "./COVID-19"
 hopkinsTimeSeries = os.path.join(hopkinsGitDir,"csse_covid_19_data/csse_covid_19_time_series")
 hopkinsConfirmed = "time_series_covid19_confirmed_global.csv"
 hopkinsDeath = "time_series_covid19_deaths_global.csv"
+hopkinsRecovered = "time_series_covid19_recovered_global.csv"
 
 nyt_git_dir = './covid-19-data'
 nyt_counties = 'us-counties.csv'
@@ -51,13 +54,40 @@ def plot_increase_bars(data, name, pdf, relative, count):
         inc = 100 * ((data_tail.T + 1) / (data_tail.T.shift() + 1) - 1).T
     else:
         inc = data_tail - data_tail.shift()
-    inc.plot.bar( title=title,rot=90)
+    filtered(inc).plot.bar( title=title,rot=90)
+    #inc.plot.bar( title=title,rot=90)
     after_plot( pdf)
 
-def plot_increase_stats( confirmed, killed, location, pdf, historyDays):
+def plot_increase_stats(active, confirmed, killed, recovered, location, pdf, historyDays):
     for rel in [True, False]:
+        plot_increase_bars(active.loc[location], f'Active {location}', pdf, rel, historyDays)
         plot_increase_bars(confirmed.loc[location], f'Confirmed {location}', pdf, rel, historyDays)
         plot_increase_bars(killed.loc[location], f'Killed {location}', pdf, rel, historyDays)
+        plot_increase_bars(recovered.loc[location], f'Recovered {location}', pdf, rel, historyDays)
+
+def filtered( data):
+    return data.rolling( 3, center=True, win_type='gaussian',min_periods=1).mean(std=3)
+
+def plot_country(active, confirmed, killed, recovered, location, pdf, historyDays):
+    filtered( active.loc[ location]).plot( legend=True, logy=False, rot=75)
+    filtered( confirmed.loc[ location]).plot( legend=True, logy=False, rot=75)
+    filtered( killed.loc[ location]).plot( legend=True, logy=False, rot=75)
+    ax = filtered( recovered.loc[ location]).plot( title=location,legend=True, logy=False, rot=75)
+    ax.legend(['active', 'confirmed', 'killed', 'recovered'])
+    after_plot(pdf)
+
+    dActive=(active.T-active.T.shift()).T
+    dConf=(confirmed.T-confirmed.T.shift()).T
+    dKilled=(killed.T-killed.T.shift()).T
+    dRecovered=(recovered.T-recovered.T.shift()).T
+    filtered( dActive.loc[ location]).plot( legend=True, logy=True, rot=75)
+    filtered( dConf.loc[ location]).plot( legend=True, logy=True, rot=75)
+    filtered( dKilled.loc[ location]).plot( legend=True, logy=True, rot=75)
+    ax = filtered( dRecovered.loc[ location]).plot( title=location+" absolute increase",legend=True, logy=True, rot=75)
+    ax.legend(['active', 'confirmed', 'killed', 'recovered'])
+    after_plot(pdf)
+
+
 
 def plot_over_time(data, title, pdf):
     data.plot( title=title,rot=90)
@@ -69,11 +99,12 @@ def plot_stats( data, title, pdf):
     plot_bars(data.iloc[:, -1:], title, pdf)
     plot_over_time( data.T, title, pdf)
 
-def plot_confirmed_vs_killed( confirmed, killed, pdf):
+def plot_confirmed_vs_killed_vs_recovered( confirmed, killed, recovered, pdf):
     for country in confirmed.index:
         confirmed.loc[country].plot(title=f'{country}', legend=True, logy=True, rot=45)
         killed.loc[country].plot(title=f'{country}', legend=True, logy=True, rot=45)
-        plt.legend(['confirmed','killed'])
+        recovered.loc[country].plot(title=f'{country}', legend=True, logy=True, rot=45)
+        plt.legend(['confirmed','killed','recovered'])
         after_plot( pdf)
 
 def read_and_cleanup( filename):
@@ -88,7 +119,7 @@ def topN( df, n):
     #return df.sort_values(df.columns[-1],na_position='first').tail(n)
     top =  df.sort_values(df.columns[-1],na_position='first').tail(n)
     selectedCountries = set(top.index.values)
-    countries_with_many_confirmed=['Sweden','Portugal','Norway','Germany']
+    countries_with_many_confirmed=['Sweden','US','Germany','Luxembourg']
     selectedCountries.update(countries_with_many_confirmed)
     selectedData = df.loc[selectedCountries]
     return selectedData.sort_values(selectedData.columns[-1])
@@ -110,7 +141,7 @@ def generate_new_york_plots(pdf=None):
     us_states = ['New York City/New York','Orleans/Louisiana']
     historyDays = 14
     for state in us_states:
-        plot_increase_stats(confirmed, killed, state, pdf, historyDays)
+        plot_increase_stats(confirmed, killed, None, state, pdf, historyDays)
 
 def generate_all_plots(pdf=None):
     # git update
@@ -119,24 +150,40 @@ def generate_all_plots(pdf=None):
     # read raw data
     confirmed = read_and_cleanup(hopkinsConfirmed)
     killed = read_and_cleanup(hopkinsDeath)
+    recovered = read_and_cleanup(hopkinsRecovered)
+    active = confirmed - killed - recovered
 
-    #Teutscheland
-    historyDays=21
-    plot_increase_stats(confirmed, killed, 'Germany', pdf, historyDays)
+    for country in ['Germany','US','Sweden','Luxembourg']:
+        historyDays=60
+        plot_increase_stats(active, confirmed, killed, recovered, country, pdf, historyDays)
+        plot_country(active, confirmed, killed, recovered, country, pdf, historyDays)
 
     # filter data by selected countries
+    '''
     countries_with_many_confirmed=confirmed.loc[confirmed.iloc[:,-1]>500].index
     confirmed = confirmed.loc[countries_with_many_confirmed]
     killed = killed.loc[countries_with_many_confirmed]
+    recovered = recovered.loc[countries_with_many_confirmed]
+    '''
+    countries_with_many_active=active.loc[confirmed.iloc[:,-1]>500].index
+    active = active.loc[countries_with_many_active]
+    confirmed = confirmed.loc[countries_with_many_active]
+    killed = killed.loc[countries_with_many_active]
+    recovered = recovered.loc[countries_with_many_active]
 
+    plot_stats(topN( active, 10), 'active', pdf)
     plot_stats(topN( confirmed, 10), 'confirmed', pdf)
     plot_stats(topN( killed, 10), 'killed', pdf)
+    plot_stats(topN( recovered, 10), 'recovered', pdf)
 
     population_millions = population['population']/1000000.0
+    plot_stats(topN((active.T/population_millions).T,10), 'active per million', pdf)
     plot_stats(topN((confirmed.T/population_millions).T,10), 'confirmed per million', pdf)
     plot_stats(topN((killed.T/population_millions).T,10), 'killed per million', pdf)
+    plot_stats(topN((recovered.T/population_millions).T,10), 'recovered per million', pdf)
 
-    plot_stats(topN(100*killed/(confirmed+1),10), 'killed per confirmed [%]', pdf)
+    #plot_stats(topN(100*killed/(confirmed+1),10), 'killed per confirmed [%]', pdf)
+    #plot_stats(topN(100*recovered/(confirmed+1),10), 'recovered per confirmed [%]', pdf)
 
     # todo stl: da muss noch ein Tiefpassfilter drauf
     dailyIncreaseConfirmed=100*((confirmed.T+1)/(confirmed.T.shift()+1)-1).T
@@ -144,82 +191,16 @@ def generate_all_plots(pdf=None):
     dailyIncreaseKilled=100*((killed.T+1)/(killed.T.shift()+1)-1).T
     plot_stats(topN(dailyIncreaseKilled,10), 'killed daily increase [%]', pdf)
 
-    plot_confirmed_vs_killed(topN(confirmed,10), killed, pdf)
+    plot_confirmed_vs_killed_vs_recovered(topN(confirmed,10), killed,recovered, pdf)
 
 
 ########################### MAIN ###########################
+
 if True:
     with PdfPages('stats.pdf') as pdf:
         generate_all_plots( pdf)
-        generate_new_york_plots( pdf)
+        #generate_new_york_plots( pdf)
 else:
     generate_all_plots()
-    generate_new_york_plots()
+    #generate_new_york_plots()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-''' allermoeglicher unausgereifter kram ... 
-
-import numpy as np
-#from scipy.optimize import curve_fit
-
-def ef(x,a,b,c,d):
-    return a+b*np.exp(c+x*d)
-
-dailyIncrease=100*((t+1)/(t.shift()+1)-1)
-
-plt.cla()
-plt.title('Daily Increase')
-dailyIncrease.plot()
-plt.show()
-'''
-'''
-for _,row in confirmedOver1000.iterrows():
-    print(row.name)
-    plt.cla()
-    v = row['1/22/20':]
-    y=v[v >= 10.0]
-    x=np.arange(len(y))
-    popt, pcov = curve_fit(ef, x, y, [1,1,-3,0.25])
-    print(ef(len(y)+4,*popt))
-    #print(popt)
-    plt.title( row.name)
-    plt.plot(x, y)
-    plt.plot(x,ef(x,*popt))
-    plt.show()
-'''
-'''
-npGermany = confirmed.loc['Germany','1/22/20':].to_numpy()
-xoGermany = np.argmax(npGermany>0.0)
-Y=npGermany[xoGermany:]
-X=np.arange(0,len(Y))
-
-popt, pcov = curve_fit(ef,X,Y)
-
-npItaly = confirmed.loc['Italy','1/22/20':].to_numpy()
-xp=[i for i in range(npItaly.shape[0])]
-x=[i for i in range(53,60)]
-np.interp( x, xp, npItaly)
-
-pass
-'''
