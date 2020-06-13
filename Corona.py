@@ -32,6 +32,8 @@ population = population.rename({
     'Taiwan': 'Taiwan*'
 })
 
+population_millions = population['population'] / 1000000.0
+
 def after_plot( pdf):
     # fix borders around charts
     plt.tight_layout()
@@ -42,7 +44,7 @@ def after_plot( pdf):
         plt.close()
 
 def plot_bars(data, title, pdf):
-    data.plot.bar( title=title,rot=90)
+    data.plot.bar( title=title,rot=90,legend=False)
     after_plot( pdf)
 
 def plot_increase_bars(data, name, pdf, relative, count):
@@ -65,8 +67,8 @@ def plot_increase_stats(active, confirmed, killed, recovered, location, pdf, his
         plot_increase_bars(killed.loc[location], f'Killed {location}', pdf, rel, historyDays)
         plot_increase_bars(recovered.loc[location], f'Recovered {location}', pdf, rel, historyDays)
 
-def filtered( data):
-    return data.rolling( 3, center=True, win_type='gaussian',min_periods=1).mean(std=3)
+def filtered( data, width=3):
+    return data.rolling( width, center=True, win_type='gaussian',min_periods=1).mean(std=width)
 
 def plot_country(active, confirmed, killed, recovered, location, pdf, historyDays):
     filtered( active.loc[ location]).plot( legend=True, logy=False, rot=75)
@@ -119,7 +121,7 @@ def topN( df, n):
     #return df.sort_values(df.columns[-1],na_position='first').tail(n)
     top =  df.sort_values(df.columns[-1],na_position='first').tail(n)
     selectedCountries = set(top.index.values)
-    countries_with_many_confirmed=['Sweden','US','Germany','Luxembourg']
+    countries_with_many_confirmed=['Sweden','US','Germany','Norway','Denmark','Finland']
     selectedCountries.update(countries_with_many_confirmed)
     selectedData = df.loc[selectedCountries]
     return selectedData.sort_values(selectedData.columns[-1])
@@ -143,7 +145,7 @@ def generate_new_york_plots(pdf=None):
     for state in us_states:
         plot_increase_stats(confirmed, killed, None, state, pdf, historyDays)
 
-def generate_all_plots(pdf=None):
+def updateData():
     # git update
     hopkinsGit = git.cmd.Git(hopkinsGitDir)
     print( hopkinsGit.pull())
@@ -152,6 +154,12 @@ def generate_all_plots(pdf=None):
     killed = read_and_cleanup(hopkinsDeath)
     recovered = read_and_cleanup(hopkinsRecovered)
     active = confirmed - killed - recovered
+
+    return confirmed, killed, recovered, active
+
+def generate_all_plots(pdf=None):
+
+    confirmed, killed, recovered, active = updateData()
 
     for country in ['Germany','US','Sweden','Luxembourg']:
         historyDays=60
@@ -176,7 +184,6 @@ def generate_all_plots(pdf=None):
     plot_stats(topN( killed, 10), 'killed', pdf)
     plot_stats(topN( recovered, 10), 'recovered', pdf)
 
-    population_millions = population['population']/1000000.0
     plot_stats(topN((active.T/population_millions).T,10), 'active per million', pdf)
     plot_stats(topN((confirmed.T/population_millions).T,10), 'confirmed per million', pdf)
     plot_stats(topN((killed.T/population_millions).T,10), 'killed per million', pdf)
@@ -191,16 +198,39 @@ def generate_all_plots(pdf=None):
     dailyIncreaseKilled=100*((killed.T+1)/(killed.T.shift()+1)-1).T
     plot_stats(topN(dailyIncreaseKilled,10), 'killed daily increase [%]', pdf)
 
+    cf = filtered(confirmed, 5)
+    kf = filtered(killed, 5)
+    weeklyIncreaseConfirmed=100*((cf.T+1)/(cf.T.shift(7)+1)-1).T
+    plot_stats(topN(weeklyIncreaseConfirmed,10), 'confirmed weekly increase [%]', pdf)
+    weeklyIncreaseKilled=100*((kf.T+1)/(kf.T.shift(7)+1)-1).T
+    plot_stats(topN(weeklyIncreaseKilled,10), 'killed weekly increase [%]', pdf)
+
     plot_confirmed_vs_killed_vs_recovered(topN(confirmed,10), killed,recovered, pdf)
+
+
+def cumulative_week(pdf=None):
+    confirmed, killed, _, _ = updateData()
+
+    killed_7 = killed.diff(7,1)
+    killed_7_pm = (killed_7.T/population_millions).T
+    print(killed_7_pm)
+    plot_stats(topN(killed_7_pm, 10), 'killed last 7 days per million', pdf)
+
+    confirmed_7 = confirmed.diff(7,1)
+    confirmed_7_pm = (confirmed_7.T/population_millions).T
+    print(confirmed_7_pm)
+    plot_stats(topN(confirmed_7_pm, 10), 'confirmed last 7 days per million', pdf)
 
 
 ########################### MAIN ###########################
 
 if True:
     with PdfPages('stats.pdf') as pdf:
-        generate_all_plots( pdf)
+        generate_all_plots(pdf)
+        cumulative_week(pdf)
         #generate_new_york_plots( pdf)
 else:
     generate_all_plots()
+    cumulative_week()
     #generate_new_york_plots()
 
