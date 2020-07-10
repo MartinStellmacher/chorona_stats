@@ -12,27 +12,18 @@ hopkinsConfirmed = "time_series_covid19_confirmed_global.csv"
 hopkinsDeath = "time_series_covid19_deaths_global.csv"
 hopkinsRecovered = "time_series_covid19_recovered_global.csv"
 
-nyt_git_dir = './covid-19-data'
-nyt_counties = 'us-counties.csv'
-nyt_states = 'us-states.csv'
+new_population_filename = 'COVID-19/csse_covid_19_data/UID_ISO_FIPS_LookUp_Table.csv'
+new_population = pd.read_csv(new_population_filename)
+population_by_country = new_population.loc[pd.isna(new_population.Province_State)].set_index('Country_Region').loc[:,'Population']
+population_millions = population_by_country / 1000000
+country_and_iso3 = new_population.loc[pd.isna(new_population.Province_State)].loc[:,['iso3','Country_Region']]  # 2 cruise ships are missing ...
 
-populationFile = './cia_world_population_202007.txt'
-population = pd.read_fwf( populationFile,colspecs=[(8,53),(65,78)],header=1,thousands=',')
-population = population.rename(columns={'Unnamed: 0':'country','Unnamed: 1':'population'})
-population = population.set_index('country')
-population = population.rename({
-    'United States':'US',
-    'Holy See (Vatican City)':'Holy See',
-    'Bahamas, The': 'Bahamas',
-    'Gaza Strip': 'West Bank and Gaza',
-    'Congo, Republic of the': 'Congo (Brazzaville)',
-    'Macedonia': 'North Macedonia',
-    'Congo, Democratic Republic of the': 'Congo (Kinshasa)',
-    'Gambia, The': 'Gambia',
-    'Taiwan': 'Taiwan*'
-})
+region_filename = 'country_to_region.csv'
+regions = pd.read_csv(region_filename).loc[:,['alpha-3', 'region', 'sub-region']]
+country_regions = pd.merge( regions, country_and_iso3, left_on='alpha-3', right_on='iso3').drop('alpha-3', axis=1).rename(columns={'Country_Region': 'country'})
 
-population_millions = population['population'] / 1000000.0
+population_by_region = pd.merge( population_by_country, country_regions, left_index=True, right_on='country').groupby('region').sum().squeeze()
+population_millions_by_region = population_by_region / 1000000
 
 nTop = 3
 
@@ -91,19 +82,18 @@ def plot_country(active, confirmed, killed, recovered, location, pdf, historyDay
     ax.legend(['active', 'confirmed', 'killed', 'recovered'])
     after_plot(pdf)
 
-
-
-def plot_over_time(data, title, pdf):
+def plot_over_time(data, title, pdf=None):
     data.plot( title=title,rot=90)
     after_plot( pdf)
 
-def plot_stats( data, title, pdf):
+def plot_stats( data, title, pdf=None, with_bars=True):
     print(f'\n{title}\n\n')
     print(data)
-    plot_bars(data.iloc[:, -1:], title, pdf)
+    if with_bars:
+        plot_bars(data.iloc[:, -1:], title, pdf)
     plot_over_time( data.T, title, pdf)
 
-def plot_confirmed_vs_killed_vs_recovered( confirmed, killed, recovered, pdf):
+def plot_confirmed_vs_killed_vs_recovered( confirmed, killed, recovered, pdf=None):
     for country in confirmed.index:
         confirmed.loc[country].plot(title=f'{country}', legend=True, logy=True, rot=45)
         killed.loc[country].plot(title=f'{country}', legend=True, logy=True, rot=45)
@@ -128,25 +118,6 @@ def topN( df, n):
     selectedData = df.loc[selectedCountries]
     return selectedData.sort_values(selectedData.columns[-1])
 
-def generate_new_york_plots(pdf=None):
-    # git update
-    nyt_git = git.cmd.Git(nyt_git_dir)
-    print( nyt_git.pull())
-
-    data = pd.read_csv(os.path.join(nyt_git_dir, nyt_counties))
-    data['county_state'] = data['county']+'/'+data['state']
-    confirmed = data.loc[:, ['date', 'county_state', 'cases']]
-    confirmed = confirmed.set_index(['date', 'county_state']).unstack(0)
-    confirmed = confirmed.T.droplevel(0).T
-    killed = data.loc[:, ['date', 'county_state', 'deaths']]
-    killed = killed.set_index(['date', 'county_state']).unstack(0)
-    killed = killed.T.droplevel(0).T
-
-    us_states = ['New York City/New York','Orleans/Louisiana']
-    historyDays = 14
-    for state in us_states:
-        plot_increase_stats(confirmed, killed, None, state, pdf, historyDays)
-
 def updateData():
     # git update
     hopkinsGit = git.cmd.Git(hopkinsGitDir)
@@ -163,18 +134,24 @@ def generate_all_plots(pdf=None):
 
     confirmed, killed, recovered, active = updateData()
 
+    confirmed_by_region = pd.merge( confirmed, country_regions, left_index=True, right_on='country').groupby('region').sum()
+    killed_by_region = pd.merge( killed, country_regions, left_index=True, right_on='country').groupby('region').sum()
+
+    confirmed_by_region_per_million = (confirmed_by_region.T/population_millions_by_region).T
+    killed_by_region_per_million = (killed_by_region.T/population_millions_by_region).T
+
+    plot_stats( confirmed_by_region, 'confirmed absolute', pdf, with_bars=False)
+    plot_stats( killed_by_region, 'killed absolute', pdf, with_bars=False)
+    plot_stats( killed_by_region / confirmed_by_region, 'killed per confirmed', pdf, with_bars=False)
+    plot_stats( confirmed_by_region_per_million, 'confirmed per million', pdf, with_bars=False)
+    plot_stats( killed_by_region_per_million, 'killed per million', pdf, with_bars=False)
+
     for country in ['Germany','US','Sweden','Norway','Turkey']:
         historyDays=120
         plot_increase_stats(active, confirmed, killed, recovered, country, pdf, historyDays)
         plot_country(active, confirmed, killed, recovered, country, pdf, historyDays)
 
     # filter data by selected countries
-    '''
-    countries_with_many_confirmed=confirmed.loc[confirmed.iloc[:,-1]>500].index
-    confirmed = confirmed.loc[countries_with_many_confirmed]
-    killed = killed.loc[countries_with_many_confirmed]
-    recovered = recovered.loc[countries_with_many_confirmed]
-    '''
     countries_with_many_active=active.loc[confirmed.iloc[:,-1]>500].index
     active = active.loc[countries_with_many_active]
     confirmed = confirmed.loc[countries_with_many_active]
@@ -230,9 +207,7 @@ if True:
     with PdfPages('stats.pdf') as pdf:
         generate_all_plots(pdf)
         cumulative_week(pdf)
-        #generate_new_york_plots( pdf)
 else:
     generate_all_plots()
     cumulative_week()
-    #generate_new_york_plots()
 
