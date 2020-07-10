@@ -34,6 +34,8 @@ population = population.rename({
 
 population_millions = population['population'] / 1000000.0
 
+nTop = 3
+
 def after_plot( pdf):
     # fix borders around charts
     plt.tight_layout()
@@ -61,7 +63,7 @@ def plot_increase_bars(data, name, pdf, relative, count):
     after_plot( pdf)
 
 def plot_increase_stats(active, confirmed, killed, recovered, location, pdf, historyDays):
-    for rel in [True, False]:
+    for rel in [False]: # [True, False]:
         plot_increase_bars(active.loc[location], f'Active {location}', pdf, rel, historyDays)
         plot_increase_bars(confirmed.loc[location], f'Confirmed {location}', pdf, rel, historyDays)
         plot_increase_bars(killed.loc[location], f'Killed {location}', pdf, rel, historyDays)
@@ -121,7 +123,7 @@ def topN( df, n):
     #return df.sort_values(df.columns[-1],na_position='first').tail(n)
     top =  df.sort_values(df.columns[-1],na_position='first').tail(n)
     selectedCountries = set(top.index.values)
-    countries_with_many_confirmed=['Sweden','US','Germany','Norway','Denmark','Finland']
+    countries_with_many_confirmed=['Sweden','US','Germany','Norway','Denmark','Finland','Turkey']
     selectedCountries.update(countries_with_many_confirmed)
     selectedData = df.loc[selectedCountries]
     return selectedData.sort_values(selectedData.columns[-1])
@@ -161,8 +163,8 @@ def generate_all_plots(pdf=None):
 
     confirmed, killed, recovered, active = updateData()
 
-    for country in ['Germany','US','Sweden','Luxembourg']:
-        historyDays=60
+    for country in ['Germany','US','Sweden','Norway','Turkey']:
+        historyDays=120
         plot_increase_stats(active, confirmed, killed, recovered, country, pdf, historyDays)
         plot_country(active, confirmed, killed, recovered, country, pdf, historyDays)
 
@@ -179,33 +181,33 @@ def generate_all_plots(pdf=None):
     killed = killed.loc[countries_with_many_active]
     recovered = recovered.loc[countries_with_many_active]
 
-    plot_stats(topN( active, 10), 'active', pdf)
-    plot_stats(topN( confirmed, 10), 'confirmed', pdf)
-    plot_stats(topN( killed, 10), 'killed', pdf)
-    plot_stats(topN( recovered, 10), 'recovered', pdf)
+    plot_stats(topN( active, nTop), 'active', pdf)
+    plot_stats(topN( confirmed, nTop), 'confirmed', pdf)
+    plot_stats(topN( killed, nTop), 'killed', pdf)
+    plot_stats(topN( recovered, nTop), 'recovered', pdf)
 
-    plot_stats(topN((active.T/population_millions).T,10), 'active per million', pdf)
-    plot_stats(topN((confirmed.T/population_millions).T,10), 'confirmed per million', pdf)
-    plot_stats(topN((killed.T/population_millions).T,10), 'killed per million', pdf)
-    plot_stats(topN((recovered.T/population_millions).T,10), 'recovered per million', pdf)
+    plot_stats(topN((active.T/population_millions).T,nTop), 'active per million', pdf)
+    plot_stats(topN((confirmed.T/population_millions).T,nTop), 'confirmed per million', pdf)
+    plot_stats(topN((killed.T/population_millions).T,nTop), 'killed per million', pdf)
+    plot_stats(topN((recovered.T/population_millions).T,nTop), 'recovered per million', pdf)
 
-    #plot_stats(topN(100*killed/(confirmed+1),10), 'killed per confirmed [%]', pdf)
-    #plot_stats(topN(100*recovered/(confirmed+1),10), 'recovered per confirmed [%]', pdf)
+    #plot_stats(topN(100*killed/(confirmed+1),nTop), 'killed per confirmed [%]', pdf)
+    #plot_stats(topN(100*recovered/(confirmed+1),nTop), 'recovered per confirmed [%]', pdf)
 
     # todo stl: da muss noch ein Tiefpassfilter drauf
     dailyIncreaseConfirmed=100*((confirmed.T+1)/(confirmed.T.shift()+1)-1).T
-    plot_stats(topN(dailyIncreaseConfirmed,10), 'confirmed daily increase [%]', pdf)
+    plot_stats(topN(dailyIncreaseConfirmed,nTop), 'confirmed daily increase [%]', pdf)
     dailyIncreaseKilled=100*((killed.T+1)/(killed.T.shift()+1)-1).T
-    plot_stats(topN(dailyIncreaseKilled,10), 'killed daily increase [%]', pdf)
+    plot_stats(topN(dailyIncreaseKilled,nTop), 'killed daily increase [%]', pdf)
 
     cf = filtered(confirmed, 5)
     kf = filtered(killed, 5)
     weeklyIncreaseConfirmed=100*((cf.T+1)/(cf.T.shift(7)+1)-1).T
-    plot_stats(topN(weeklyIncreaseConfirmed,10), 'confirmed weekly increase [%]', pdf)
+    plot_stats(topN(weeklyIncreaseConfirmed,nTop), 'confirmed weekly increase [%]', pdf)
     weeklyIncreaseKilled=100*((kf.T+1)/(kf.T.shift(7)+1)-1).T
-    plot_stats(topN(weeklyIncreaseKilled,10), 'killed weekly increase [%]', pdf)
+    plot_stats(topN(weeklyIncreaseKilled,nTop), 'killed weekly increase [%]', pdf)
 
-    plot_confirmed_vs_killed_vs_recovered(topN(confirmed,10), killed,recovered, pdf)
+    plot_confirmed_vs_killed_vs_recovered(topN(confirmed,nTop), killed,recovered, pdf)
 
 
 def cumulative_week(pdf=None):
@@ -214,12 +216,12 @@ def cumulative_week(pdf=None):
     killed_7 = killed.diff(7,1)
     killed_7_pm = (killed_7.T/population_millions).T
     print(killed_7_pm)
-    plot_stats(topN(killed_7_pm, 10), 'killed last 7 days per million', pdf)
+    plot_stats(topN(killed_7_pm, nTop), 'killed last 7 days per million', pdf)
 
     confirmed_7 = confirmed.diff(7,1)
     confirmed_7_pm = (confirmed_7.T/population_millions).T
     print(confirmed_7_pm)
-    plot_stats(topN(confirmed_7_pm, 10), 'confirmed last 7 days per million', pdf)
+    plot_stats(topN(confirmed_7_pm, nTop), 'confirmed last 7 days per million', pdf)
 
 
 ########################### MAIN ###########################
